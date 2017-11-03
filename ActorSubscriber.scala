@@ -109,10 +109,12 @@ final case class WatermarkRequestStrategy(highWatermark: Int, lowWatermark: Int)
       cwnd = highWatermark - remainingRequested
     else cwnd = 0
 
-    print("cwnd = ")
-    println(cwnd)
+
     print("remainingRequested = ")
     println(remainingRequested)
+    print("cwnd = ")
+    println(cwnd)
+
     return cwnd
   }
 }
@@ -138,6 +140,7 @@ final case class TahoeRequestStrategy(capacity: Int) extends RequestStrategy {
   var limit = 0
   var ssthresh = 0
   var first = true
+  var stop = false
 
   def slowStart() {
     cwnd = (math.pow(2, n)).toInt
@@ -154,28 +157,36 @@ final case class TahoeRequestStrategy(capacity: Int) extends RequestStrategy {
     else {
       limit = cwnd
       ssthresh = limit / 2
-      cwnd = 1
+      cwnd = 0
       n = 0
       first = false
+      stop = true
     }
   }
 
-  def loop() {
-    if (cwnd < limit) {
-      if (cwnd < ssthresh) {
-        slowStart()
-      } else {
-        overFlowAvoidance()
+  def loop(remainingRequested: Int) {
+      if(!stop){
+        if (cwnd < limit && remainingRequested < capacity) {
+          if (cwnd < ssthresh) {
+            slowStart()
+          } else {
+            overFlowAvoidance()
+          }
+        } else {
+          cwnd = 0
+          n = 0
+          stop = true
+        }
+      }else{
+        if (remainingRequested == 1) stop = false
+        cwnd = 0
       }
-    } else {
-      cwnd = 1
-      n = 0
     }
-  }
+
 
   def requestDemand(remainingRequested: Int): Int = {
     if(first) searchLimit(remainingRequested)
-    else loop()
+    else loop(remainingRequested)
 
     print("cwnd = ")
     println(cwnd)
@@ -193,19 +204,16 @@ object RenoRequestStrategy {
 }
 
 final case class RenoRequestStrategy(capacity: Int) extends RequestStrategy {
-  require(ssthresh >= 0, "ssthresh must be >= 0")
-  require(limit >= ssthresh, "limit must be >= ssthresh")
-
   /**
   * Create [[RenoRequestStrategy]].
   */
-  //def this(limit: Int) = this(limit, ssthresh = math.max(1, limit / 2))
 
   var cwnd = 1
   var n = 0
   var limit = 0
   var ssthresh = 0
   var first = true
+  var stop = false
 
   def slowStart() {
     cwnd = (math.pow(2, n)).toInt
@@ -222,28 +230,37 @@ final case class RenoRequestStrategy(capacity: Int) extends RequestStrategy {
     else {
       limit = cwnd
       ssthresh = limit / 2
-      cwnd = ssthresh
+      cwnd = 0
       n = 0
       first = false
+      stop = true
     }
   }
 
-  def loop() {
-    if (cwnd < limit) {
-      overFlowAvoidance()
+  def loop(remainingRequested: Int) {
+    if (!stop) {
+      if (cwnd < limit && remainingRequested < capacity) {
+        overFlowAvoidance()
+      } else {
+        stop = true
+        cwnd = 0
+      }
     } else {
-      cwnd = ssthresh
+      if (remainingRequested == 0) {
+        stop = false
+        cwnd = ssthresh
+      } else cwnd = 0
     }
   }
 
   def requestDemand(remainingRequested: Int): Int = {
     if(first) searchLimit(remainingRequested)
-    else loop()
+    else loop(remainingRequested)
 
-    print("cwnd = ")
-    println(cwnd)
     print("remainingRequested = ")
     println(remainingRequested)
+    print("cwnd = ")
+    println(cwnd)
     return cwnd
   }
 }
